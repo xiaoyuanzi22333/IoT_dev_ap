@@ -3,16 +3,20 @@
 
 #include <Arduino.h>
 #include <driver/i2s.h>
-#include "filesys.h"
+#include "sdcard.h"
+#include <HTTPClient.h>
 
 
-unsigned long start_time;
-unsigned long end_time;
+unsigned long startTime;
+unsigned long endTime;
 
 void i2sInit();
 void i2sClose();
-void i2s_adc(void *arg);
+void i2s_adc();
 void i2s_adc_data_scale(uint8_t *d_buff, uint8_t *s_buff, uint32_t len);
+void uploadFile(const char *path);
+
+HTTPClient http;
 
 void i2sInit()
 {
@@ -47,16 +51,29 @@ void i2sInit()
         i2s_driver_uninstall(I2S_PORT);
         return;
     }
+
+    Serial.println("I2s Init Success");
 };
 
 void i2sClose()
 {
     i2s_stop(I2S_PORT);
     i2s_driver_uninstall(I2S_PORT);
+    Serial.println("closed i2s");
 }
 
-void i2s_adc(void *arg)
+bool lock = true;
+
+
+void i2s_adc()
 {
+    Serial.println("start opening file");
+    File raw = SD.open("/kysten2.txt", FILE_WRITE);
+    File file = SD.open(filename, FILE_WRITE);
+    byte header[headerSize];
+    wavHeader(header, FLASH_RECORD_SIZE); // Generate WAV header
+    file.write(header, headerSize); // Write header
+
     Serial.println('a');
     int i2s_read_len = I2S_READ_LEN;
     int flash_wr_size = 0;
@@ -65,7 +82,7 @@ void i2s_adc(void *arg)
     if (i2s_read_buff == NULL)
     {
         Serial.println("Failed to allocate memory for i2s_read_buff");
-        vTaskDelete(NULL); // 删除当前任务
+        vTaskDelete(NULL);
     }
 
     uint8_t *flash_write_buff = (uint8_t *)calloc(i2s_read_len, sizeof(char));
@@ -77,45 +94,37 @@ void i2s_adc(void *arg)
     }
 
     Serial.println('b');
-
-    // 准备录音
-    // i2s_read(I2S_PORT, (void *)i2s_read_buff, i2s_read_len, &bytes_read, portMAX_DELAY);
     i2s_read(I2S_PORT, (void *)i2s_read_buff, i2s_read_len, &bytes_read, portMAX_DELAY);
 
     Serial.println(" *** Recording Start *** ");
-    start_time = millis();
-    // while(millis() - start_time < RECORD_TIME*1000)
+    startTime = millis();
     while (flash_wr_size < FLASH_RECORD_SIZE)
     {
         i2s_read(I2S_PORT, (void *)i2s_read_buff, i2s_read_len, &bytes_read, portMAX_DELAY);
         i2s_adc_data_scale(flash_write_buff, (uint8_t *)i2s_read_buff, i2s_read_len);
         file.write((const byte *)flash_write_buff, i2s_read_len);
+        raw.write((const byte *)flash_write_buff, i2s_read_len);
         flash_wr_size += i2s_read_len;
         ets_printf("Recording Progress: %u%%\n", flash_wr_size * 100 / FLASH_RECORD_SIZE);
     }
     Serial.println(" *** Recording Complete *** ");
-    end_time = millis();
-    Serial.println((end_time - start_time));
+    endTime = millis();
+    Serial.println((endTime - startTime));
     Serial.println("Recording complete");
 
-    // 关闭文件并释放内存
     file.close();
+    raw.close();
     free(i2s_read_buff);
     free(flash_write_buff);
 
-    // 更新 WAV 头部
     updateWavHeader();
+    listSD();
 
-    listLittleFS();
-
-    Serial.println("start transferring");
+    Serial.println("Start transferring");
     delay(1000);
-    // sendFile(filename);
-    // xTaskCreatePinnedToCore(sendFile, "sendfile", 4096, NULL, 1, NULL, 0);
-    //   sendFile();
-    uploadFile("/recording.wav","http://192.168.103.46:8000/");
-    vTaskDelete(NULL); // 删除任务
+    uploadFile("/recording.wav");
 }
+
 
 void i2s_adc_data_scale(uint8_t *d_buff, uint8_t *s_buff, uint32_t len)
 {
@@ -129,6 +138,88 @@ void i2s_adc_data_scale(uint8_t *d_buff, uint8_t *s_buff, uint32_t len)
         d_buff[j++] = 0;
         d_buff[j++] = dac_value * 256 / 4096;
     }
+}
+
+// for test only
+const char* ID = "LR72TV";
+const char* PASSWORD = "Neket7e2";
+const String serverUrl = "http://192.168.103.42:8000";
+
+void uploadFile(const char *path)
+{
+    i2sClose();
+    delay(1000);
+    initWifi(ID, PASSWORD);
+    delay(1000);
+    File file = SD.open(path, FILE_READ);
+    if (!file)
+    {
+        Serial.println("Failed to open file");
+        return;
+    }
+
+    size_t fileSize = file.size();
+    Serial.printf("File size: %d bytes\n", fileSize);
+
+    http.begin(serverUrl);
+
+    String boundary = "----ESP32Boundary";
+    String contentType = "multipart/form-data; boundary=" + boundary;
+    http.addHeader("Content-Type", contentType);
+
+    String bodyStart = "--" + boundary + "\r\n" +
+                       "Content-Disposition: form-data; name=\"WavFile\"; filename=\"example.wav\"\r\n" +
+                       "Content-Type: text/plain\r\n\r\n";
+
+    String bodyEnd = "\r\n--" + boundary + "--\r\n";
+
+    size_t totalSize = bodyStart.length() + fileSize + bodyEnd.length();
+
+    http.addHeader("Content-Length", String(totalSize));
+
+    http.GET();
+    int httpResponseCode = http.POST("");
+    Serial.println(httpResponseCode);
+    Serial.println(http.connected());
+
+    WiFiClient *stream = http.getStreamPtr();
+    if (stream == nullptr)
+    {
+        Serial.println("stream is nullptr");
+        return;
+    }
+
+    stream->print(bodyStart);
+
+    uint8_t buffer[512];
+    unsigned long start = millis();
+    int i = 0;
+    while (file.available())
+    {
+        Serial.print("buff transfer: "); Serial.println(i);
+        size_t bytesRead = file.read(buffer, sizeof(buffer));
+        stream->write(buffer, bytesRead);
+        i++;
+    }
+    Serial.print("time used: "); Serial.println(millis()-start);
+
+    stream->print(bodyEnd);
+
+    if (httpResponseCode > 0)
+    {
+        String response = http.getString();
+        Serial.printf("HTTP Response Code: %d\n", httpResponseCode);
+        Serial.println("Response from server:");
+        Serial.println(response);
+        Serial.println("response endddd");
+    }
+    else
+    {
+        Serial.printf("Error in sending POST request: %s\n", http.errorToString(httpResponseCode).c_str());
+    }
+
+    http.end();
+    file.close();
 }
 
 #endif

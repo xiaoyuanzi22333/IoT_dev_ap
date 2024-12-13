@@ -18,14 +18,14 @@
 
 File file;
 
-void LittleFSInit(int headerSize = 44, char filename[] = "/recording.wav");
-void listLittleFS(char filename[] = "/recording.wav");
-void updateWavHeader(int headerSize=44, char filename[] = "/recording.wav");
+void LittleFSInit(int headerSize = 44, String filename = "/recording.wav");
+void listLittleFS();
+void updateWavHeader(int headerSize=44, String filename = "/recording.wav");
 void wavHeader(byte *header, int wavSize, int headerSize=44);
 void uploadFile(const char *path, String serverUrl); 
 void sendFile(); // 已弃用
 
-void LittleFSInit(int headerSize = 44, char filename[] = "/recording.wav")
+void LittleFSInit(int headerSize, String filename)
 {
     if (!LittleFS.begin(true))
     {
@@ -49,7 +49,7 @@ void LittleFSInit(int headerSize = 44, char filename[] = "/recording.wav")
 }
 
 
-void listLittleFS(char filename[] = "/recording.wav")
+void listLittleFS()
 {
     Serial.println(F("\r\nListing LittleFS files:"));
     static const char line[] PROGMEM = "=================================================";
@@ -106,7 +106,7 @@ void listLittleFS(char filename[] = "/recording.wav")
     delay(1000);
 }
 
-void updateWavHeader(int headerSize=44, char filename[] = "/recording.wav")
+void updateWavHeader(int headerSize, String filename)
 {
     // 重新打开文件以更新头部
     File file = LittleFS.open(filename, "r+"); // 使用 "r+" 模式读取并写入，不会覆盖文件
@@ -132,7 +132,7 @@ void updateWavHeader(int headerSize=44, char filename[] = "/recording.wav")
     Serial.println("WAV header updated successfully");
 }
 
-void wavHeader(byte *header, int wavSize, int headerSize=44)
+void wavHeader(byte *header, int wavSize, int headerSize)
 { // 数字小端格式，字符大端格式
     header[0] = 'R';
     header[1] = 'I';
@@ -198,27 +198,27 @@ void uploadFile(const char *path, String serverUrl)
     HTTPClient http;
     http.begin(serverUrl);
 
+    Serial.print("get code: ");
+    Serial.println(http.GET());
+
     // 构建 multipart/form-data 请求头
     String boundary = "----ESP32Boundary"; // 定义 boundary
     String contentType = "multipart/form-data; boundary=" + boundary;
     http.addHeader("Content-Type", contentType);
-
     // 构建 multipart/form-data 请求体
     String bodyStart = "--" + boundary + "\r\n" +
                        "Content-Disposition: form-data; name=\"WavFile\"; filename=\"example.wav\"\r\n" +
                        "Content-Type: text/plain\r\n\r\n";
-
     String bodyEnd = "\r\n--" + boundary + "--\r\n";
-
     // 计算请求体总大小
     size_t totalSize = bodyStart.length() + fileSize + bodyEnd.length();
 
+
     // 设置请求体大小
     http.addHeader("Content-Length", String(totalSize));
+    Serial.print("content-length");
+    Serial.println(String(totalSize));
 
-    // 开始 POST 请求
-    //   int httpResponseCode = http.GET();
-    http.GET();
     int httpResponseCode = http.POST("");
     Serial.println(httpResponseCode);
     Serial.println(http.connected());
@@ -229,6 +229,7 @@ void uploadFile(const char *path, String serverUrl)
         Serial.println("stream is nullptr");
         return;
     }
+
 
     // 发送 multipart/form-data 请求头和 bodyStart
     stream->print(bodyStart);
@@ -243,6 +244,7 @@ void uploadFile(const char *path, String serverUrl)
 
     // 发送 bodyEnd
     stream->print(bodyEnd);
+
     //   httpResponseCode = http.POST("");
     // 获取服务器响应
     if (httpResponseCode > 0)
