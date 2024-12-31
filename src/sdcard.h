@@ -14,10 +14,10 @@
 #define I2S_SCK 23
 #define I2S_SD 4
 #define I2S_PORT I2S_NUM_0
-#define I2S_SAMPLE_RATE  (2000)
+#define I2S_SAMPLE_RATE (20000)
 #define I2S_SAMPLE_BITS 16
 #define I2S_READ_LEN (4 * 1024)
-#define RECORD_TIME (5) // Seconds
+#define RECORD_TIME (15) // Seconds
 #define I2S_CHANNEL_NUM (1)
 #define FLASH_RECORD_SIZE (I2S_CHANNEL_NUM * I2S_SAMPLE_RATE * I2S_SAMPLE_BITS / 8 * RECORD_TIME)
 
@@ -28,10 +28,11 @@ const int headerSize = 44; // wave header size
 const char filename[] = "/recording.wav";
 
 void SDCardInit();
-void listSD();
+void listSD(const char* folderPath = "/");
 void sdCardClean();
 void updateWavHeader(String filename = filename);
 void wavHeader(byte *header, int wavSize);
+
 
 void SDCardInit()
 {
@@ -53,7 +54,7 @@ void SDCardInit()
     listSD();
 }
 
-void listSD()
+void listSD(const char* folderPath)
 {
     Serial.println(F("\r\nListing SD card files:"));
     static const char line[] PROGMEM = "=================================================";
@@ -62,7 +63,7 @@ void listSD()
     Serial.println(F("  File name                              Size"));
     Serial.println(FPSTR(line));
 
-    File root = SD.open("/");
+    File root = SD.open(folderPath);
     if (!root)
     {
         Serial.println(F("Failed to open directory"));
@@ -75,7 +76,8 @@ void listSD()
     }
 
     File file_list = root.openNextFile();
-    while (file_list) {
+    while (file_list)
+    {
         // if (file_list.isDirectory()) {
         //     Serial.print("DIR : ");
         //     String fileName = file_list.name();
@@ -85,14 +87,18 @@ void listSD()
         Serial.print("  " + fileName);
         // 文件路径最多支持 31 个字符（可根据实际情况调整）
         int spaces = 33 - fileName.length(); // 格式化对齐
-        if (spaces < 1) spaces = 1;
-        while (spaces--) {
+        if (spaces < 1)
+            spaces = 1;
+        while (spaces--)
+        {
             Serial.print(" ");
         }
         String fileSize = (String)file_list.size();
         spaces = 10 - fileSize.length(); // 格式化对齐
-        if (spaces < 1) spaces = 1;
-        while (spaces--) Serial.print(" ");
+        if (spaces < 1)
+            spaces = 1;
+        while (spaces--)
+            Serial.print(" ");
         Serial.println(fileSize + " bytes");
         // }
 
@@ -108,43 +114,56 @@ void listSD()
 
 // 针对性删除
 // 根目录下记得前面加上一个/
-void sdCardFileDelete(String filePath){
-    if (SD.exists(filePath)) {
-      Serial.println("文件存在，正在删除...");
-      if (SD.remove(filePath)) { // 删除文件
-        Serial.println("文件已成功删除！");
-      } else {
-        Serial.println("文件删除失败！");
-      }
-    } else {
-      Serial.println("文件不存在！");
+void sdCardFileDelete(String filePath)
+{
+    if (SD.exists(filePath))
+    {
+        Serial.println("文件存在，正在删除...");
+        if (SD.remove(filePath))
+        { // 删除文件
+            Serial.println("文件已成功删除！");
+        }
+        else
+        {
+            Serial.println("文件删除失败！");
+        }
+    }
+    else
+    {
+        Serial.println("文件不存在！");
     }
 }
 
 // 大清洗
-void sdCardClean(){
+void sdCardClean()
+{
     Serial.println("start clean the SD card");
     File root = SD.open("/"); // 打开 SD 卡根目录
-    if (!root) {
+    if (!root)
+    {
         Serial.println(F("Failed to open directory"));
         return;
     }
-    if (!root.isDirectory()) {
+    if (!root.isDirectory())
+    {
         Serial.println(F("Not a directory"));
         return;
     }
 
     Serial.println("成功打开根目录");
     File file = root.openNextFile(); // 获取下一个文件
-    while (file) {
+    while (file)
+    {
         String filename = file.name();
-        if(filename == "System Volume Information"){
+        if (filename == "System Volume Information")
+        {
             file.close();
             file = root.openNextFile(); // 获取下一个文件
             continue;
         }
-        Serial.print("deleting: ");Serial.println(filename);
-        sdCardFileDelete("/"+filename);
+        Serial.print("deleting: ");
+        Serial.println(filename);
+        sdCardFileDelete("/" + filename);
         file.close();
         file = root.openNextFile(); // 获取下一个文件
     }
@@ -156,13 +175,17 @@ void updateWavHeader(String filename)
 {
     // 重新打开文件以更新头部
     file = SD.open(filename, FILE_WRITE); // 使用 FILE_WRITE 模式读取并写入，不会覆盖文件
-    if (!file) {
+    if (!file)
+    {
         Serial.println("Failed to open file file!");
-    } else {
+    }
+    else
+    {
         // 将文件指针移动到末尾
         Serial.print("file file size: ");
         Serial.println(file.size());
-        if(file.size() != 0){
+        if (file.size() != 0)
+        {
             file.seek(file.size());
         }
     }
@@ -215,10 +238,10 @@ void wavHeader(byte *header, int wavSize)
     header[21] = 0x00;
     header[22] = 0x01; // channel number:1, 2byte integer
     header[23] = 0x00;
-    header[24] = (char) (I2S_SAMPLE_RATE &0xff);
-    header[25] = (char) ((I2S_SAMPLE_RATE >>8) & 0xff);
-    header[26] = (char) ((I2S_SAMPLE_RATE >>16) & 0xff);
-    header[27] = (char) ((I2S_SAMPLE_RATE >>24) & 0xff);
+    header[24] = (char)(I2S_SAMPLE_RATE & 0xff);
+    header[25] = (char)((I2S_SAMPLE_RATE >> 8) & 0xff);
+    header[26] = (char)((I2S_SAMPLE_RATE >> 16) & 0xff);
+    header[27] = (char)((I2S_SAMPLE_RATE >> 24) & 0xff);
     header[28] = 0x00; // SampleRate*BitPerSample*ChannelNum/8=16000*16*1/8=0x00007D00, 4byte integer
     header[29] = 0x7D;
     header[30] = 0x00;
@@ -236,7 +259,6 @@ void wavHeader(byte *header, int wavSize)
     header[42] = (byte)((wavSize >> 16) & 0xFF);
     header[43] = (byte)((wavSize >> 24) & 0xFF);
 }
-
 
 
 

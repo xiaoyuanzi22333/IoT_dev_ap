@@ -14,7 +14,9 @@ void i2sInit();
 void i2sClose();
 void i2s_adc();
 void i2s_adc_data_scale(uint8_t *d_buff, uint8_t *s_buff, uint32_t len);
-void uploadFile(const char *path);
+void uploadFile(String path);
+void uploadFolder(String folderPath);
+bool folderExists(String folderPath);
 
 HTTPClient http;
 
@@ -122,6 +124,7 @@ void i2s_adc()
 
     Serial.println("Start transferring");
     delay(1000);
+    i2sClose();
     uploadFile("/recording.wav");
 }
 
@@ -143,12 +146,10 @@ void i2s_adc_data_scale(uint8_t *d_buff, uint8_t *s_buff, uint32_t len)
 // for test only
 const char* ID = "LR72TV";
 const char* PASSWORD = "Neket7e2";
-const String serverUrl = "http://192.168.103.42:8000";
+const String serverUrl = "http://192.168.103.41:8000";
 
-void uploadFile(const char *path)
+void uploadFile(String path)
 {
-    i2sClose();
-    delay(1000);
     initWifi(ID, PASSWORD);
     delay(1000);
     File file = SD.open(path, FILE_READ);
@@ -168,7 +169,7 @@ void uploadFile(const char *path)
     http.addHeader("Content-Type", contentType);
 
     String bodyStart = "--" + boundary + "\r\n" +
-                       "Content-Disposition: form-data; name=\"WavFile\"; filename=\"example.wav\"\r\n" +
+                       "Content-Disposition: form-data; name=\"WavFile\"; filename=\""+ file.name() +"\"\r\n" +
                        "Content-Type: text/plain\r\n\r\n";
 
     String bodyEnd = "\r\n--" + boundary + "--\r\n";
@@ -191,15 +192,18 @@ void uploadFile(const char *path)
 
     stream->print(bodyStart);
 
-    uint8_t buffer[512];
+    int buffer_length = 512*4;
+    uint8_t buffer[buffer_length];
     unsigned long start = millis();
     int i = 0;
+    int record_size = file.size();
     while (file.available())
     {
-        Serial.print("buff transfer: "); Serial.println(i);
+        // Serial.print("buff transfer: "); Serial.println(i);
         size_t bytesRead = file.read(buffer, sizeof(buffer));
         stream->write(buffer, bytesRead);
-        i++;
+        i += buffer_length;
+        ets_printf("Uploading Progress: %u%%\n", i * 100 / record_size);
     }
     Serial.print("time used: "); Serial.println(millis()-start);
 
@@ -220,6 +224,55 @@ void uploadFile(const char *path)
 
     http.end();
     file.close();
+}
+
+
+void uploadFolder(String folderPath)
+{
+    if (!folderExists(folderPath))
+    {
+        Serial.println("folderPath error");
+        return;
+    }
+    File root = SD.open(folderPath);
+    if (!root)
+    {
+        Serial.println(F("Failed to open directory"));
+        return;
+    }
+    if (!root.isDirectory())
+    {
+        Serial.println(F("Not a directory"));
+        return;
+    }
+    File file_list = root.openNextFile();
+    initWifi(ID, PASSWORD);
+    delay(1000);
+    while (file_list)
+    {
+        
+        String filePath = folderPath + '/' + file_list.name();
+        Serial.println(filePath);
+        uploadFile(filePath);
+        file_list.close();
+        file_list = root.openNextFile();
+    }
+    root.close();
+    WiFi.disconnect();
+    Serial.println("Wi-Fi 已断开");
+}
+
+bool folderExists(String folderPath)
+{
+    File dir = SD.open(folderPath); // 尝试打开文件夹
+    if (!dir)
+    {
+        // 如果无法打开，则目录不存在
+        return false;
+    }
+    bool isFolder = dir.isDirectory();
+    dir.close(); // 关闭文件夹
+    return isFolder;
 }
 
 #endif

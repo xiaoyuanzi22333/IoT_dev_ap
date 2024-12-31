@@ -89,7 +89,7 @@ class FileServerHandler(SimpleHTTPRequestHandler):
         处理文件上传请求，保存文件到指定目录。
         """
         # print(self.headers['Content-Length'])
-        # print(self.headers['Content-Type'])
+        #  print(self.headers['Content-Type'])
         
         content_length = int(self.headers['Content-Length'])
         content_type = self.headers['Content-Type']
@@ -143,11 +143,20 @@ def run(server_class=HTTPServer, handler_class=FileServerHandler, port=8000):
     """
     server_address = ('0.0.0.0', port)
     httpd = server_class(server_address, handler_class)
+    httpd.timeout = 60  # 设置超时时间为 60 秒
     print(f"Starting server on port {port}...")
     print(f"Upload files to: http://localhost:{port}")
     print(f"Browse and download files: http://localhost:{port}/uploads")
-    httpd.serve_forever()
-
+    # httpd.serve_forever()  # 直接启动服务器
+    try:
+        httpd.serve_forever()  # 启动服务器
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
+        httpd.shutdown()  # 手动关闭服务器
+        print("Server closed.")
+    finally:
+        httpd.server_close()  # 确保服务器资源被释放
+        print("Server closed.") 
 
 
 if __name__ == "__main__":

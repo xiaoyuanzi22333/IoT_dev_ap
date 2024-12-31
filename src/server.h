@@ -224,6 +224,7 @@ void initWifi(const char *ID, const char *PASSWORD)
     Serial.println("PASSWORLD:");
     Serial.println(PASSWORD);
 
+    WiFi.mode(WIFI_STA);
     WiFi.begin(ID, PASSWORD);
 
     while (WiFi.status() != WL_CONNECTED)
@@ -234,10 +235,7 @@ void initWifi(const char *ID, const char *PASSWORD)
 
     Serial.println("连接成功！");
 
-    delay(3000);
-    // 配置时间
-    getTime();
-    
+    Serial.println("IP 地址: " + WiFi.localIP().toString());
 }
 
 
