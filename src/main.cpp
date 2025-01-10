@@ -5,10 +5,12 @@
 #include "sdcard.h"
 #include "mic.h"
 #include "ftpp.h"
+#include "blueclassic.h"
 
 const char *id = "LR72TV";
 const char *password = "Neket7e2";
 
+void ioT_Wifi_Service();
 void ftp_test1();
 void get_ftp_res();
 void buttonRecord(void *arg);
@@ -27,18 +29,42 @@ void setup()
     Serial.begin(115200);
     pinMode(BUTTON_PIN, INPUT_PULLDOWN);
     pinMode(LED_PIN, OUTPUT);
+    // 文件上传手机app
+    SDCardInit();
+    initBlueClassic();
+}
 
-    // xTaskCreatePinnedToCore(AP_wifi, NULL, 1024 * 4, NULL, 1, NULL, 0);
-    // xTaskCreatePinnedToCore(connect_2_wifi, NULL, 1024 * 4, NULL, 1, NULL, 1);
-    // xTaskCreatePinnedToCore(check_wifi_status, NULL, 1024 * 2, NULL, 1, NULL, 0);
+void loop()
+{
+    // 启动服务器必须加上这句话我操
+    server.handleClient();
+}
+
+void ioT_Wifi_Service()
+{
+    xTaskCreatePinnedToCore(AP_wifi, NULL, 1024 * 4, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(connect_2_wifi, NULL, 1024 * 4, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(check_wifi_status, NULL, 1024 * 2, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(ClientHandle, NULL, 1024 * 4, NULL, 1, NULL, 1);
+}
+
+
+void recordTask()
+{
+    // recording task
     // LittleFSInit();
-
-    // i2sInit();
+    i2sInit();
     SDCardInit();
     delay(3000);
     initWifi(id, password);
-    // xTaskCreatePinnedToCore(buttonRecord, NULL, 1024 * 64, NULL, 1, NULL, 1);
-    // xTaskCreate(buttonRecord, NULL, 1024 * 4, NULL, 1, NULL);
+    xTaskCreatePinnedToCore(buttonRecord, NULL, 1024 * 64, NULL, 1, NULL, 1);
+    xTaskCreate(buttonRecord, NULL, 1024 * 4, NULL, 1, NULL);
+}
+
+
+void ftp_transfer()
+{
+    // FTP task
     IPAddress ipa;
     if (WiFi.hostByName(ftp_server, ipa))
     {
@@ -49,17 +75,11 @@ void setup()
         Serial.println("FTP Server is unreachable!");
     }
     delay(1000);
-    Serial.println("init completed");
-
-    // ftpp_test(); //测试能否通过dclinet写入
-    // ftp_task(); //测试dclient能否连接
-    ftp_upload();
+    ftpp_test(); //测试能否通过dclinet写入
+    ftp_task(); //测试dclient能否连接
+    ftp_upload(); //测试ftp文件上传
 }
 
-void loop()
-{
-    // server.handleClient();
-}
 
 void ftp_task()
 {

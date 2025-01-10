@@ -24,12 +24,24 @@ String wifi_iden = "";
 
 WebServer server(80);
 
+
+void ClientHandle(void *arg);
 void AP_wifi(void *arg);
 void connect_2_wifi(void *arg);
 void getTime();
 
+void ClientHandle(void *arg)
+{
+    while(true)
+    {
+        server.handleClient();
+        vTaskDelay(10/portTICK_PERIOD_MS);
+    }
+}
+
 void handleMsg()
 {
+    Serial.println("handling msg args");
     String response = "";
     if (server.hasArg("sid"))
     {

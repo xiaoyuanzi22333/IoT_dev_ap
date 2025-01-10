@@ -22,7 +22,7 @@ void ftpp_test()
     Serial.println(ftp.isConnected());
 
     ftp.ChangeWorkDir("/rdf/myftp/123");
-    ftp.InitFile("Type I");
+    // ftp.InitFile("Type I");
 
     ftp.NewFile("hello.txt");
 
@@ -44,7 +44,7 @@ void ftp_upload()
     Serial.println(ftp.isConnected());
 
     ftp.ChangeWorkDir("/rdf/myftp/123");
-    ftp.InitFile("Type I");
+    // ftp.InitFile("Type I");
 
     ftp.NewFile("wavFile.wav");
 
