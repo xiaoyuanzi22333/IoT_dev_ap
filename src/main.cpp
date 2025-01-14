@@ -36,7 +36,7 @@ void setup()
 
 void loop()
 {
-    // 启动服务器必须加上这句话我操
+    // 启动服务器必须加上这句话
     server.handleClient();
 }
 
