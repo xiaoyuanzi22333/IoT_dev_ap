@@ -51,11 +51,19 @@ void handleBluetoothClient(void *arg)
             int colonIndex = msg.indexOf(':'); // 查找冒号的位置
             String prefix = msg.substring(0, colonIndex); // 获取冒号前的部分
             String directory = msg.substring(colonIndex + 1); // 获取冒号后的部分
+            if(directory == ""){
+                directory = "/";
+            }
             if(prefix == "101"){
                 // transferFileBluetooth("/example.txt");
                 Serial.println("received prefix: " + prefix);
                 Serial.println("received directory: " + directory);
                 getFileDict(directory); // 获取目录文件列表
+            }
+            if(prefix == "102"){
+                Serial.println("received prefix: " + prefix);
+                Serial.println("received filename: " + directory);
+                transferFileBluetooth(directory);
             }
         }
         vTaskDelay(50);
@@ -96,15 +104,6 @@ void transferFileBluetooth(String filePath)
             return;
         }
 
-        // SerialBT.println("400: start file transfer");
-        // delay(1000);
-        // SerialBT.println("400: start file transfer");
-
-        // String msg_400 = "400: start file transfer\n";
-        // SerialBT.write((const uint8_t*)msg_400.c_str(),msg_400.length());
-        // delay(50);
-        // SerialBT.write((const uint8_t*)msg_400.c_str(),msg_400.length());
-        // delay(50);
         Serial.println("400: start file transfer");
 
         // 分块发送文件
@@ -126,9 +125,6 @@ void transferFileBluetooth(String filePath)
         Serial.println("发送结束标志");
         String msg_401 = "401: end file transfer\n";
         SerialBT.write((const uint8_t*)msg_401.c_str(),msg_401.length());
-        delay(50);
-        SerialBT.write((uint8_t*)"", 0); // 发送空包标志结束
-        Serial.println("401: file transfer end");
     }
 }
 
@@ -178,7 +174,9 @@ void getFileDict(String filePath)
     Serial.println(jsonString);
     SerialBT.write((const uint8_t*)jsonString.c_str(),jsonString.length());
     delay(50);
-    // SerialBT.println("401: end file transfer");
+    Serial.println("发送结束标志");
+    String msg_401 = "401: end dict transfer\n";
+    SerialBT.write((const uint8_t*)msg_401.c_str(),msg_401.length());
 }
 
 #endif

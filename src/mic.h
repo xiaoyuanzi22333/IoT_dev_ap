@@ -15,7 +15,8 @@ void i2sClose();
 void i2s_adc();
 void i2s_adc_data_scale(uint8_t *d_buff, uint8_t *s_buff, uint32_t len);
 void uploadFile(String path);
-void uploadFolder(String folderPath);
+void uploadFolder(String folderPath); // old version for python flask
+void uploadFiletoNode(String path); // new version for node.js
 bool folderExists(String folderPath);
 
 HTTPClient http;
@@ -146,7 +147,7 @@ void i2s_adc_data_scale(uint8_t *d_buff, uint8_t *s_buff, uint32_t len)
 // for test only
 const char* ID = "LR72TV";
 const char* PASSWORD = "Neket7e2";
-const String serverUrl = "http://192.168.103.41:8000";
+const String serverUrl = "http://192.168.103.55:3000";
 
 void uploadFile(String path)
 {
@@ -274,5 +275,65 @@ bool folderExists(String folderPath)
     dir.close(); // 关闭文件夹
     return isFolder;
 }
+
+
+void uploadFiletoNode(String path){
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi not connected!");
+      return;
+    }
+    Serial.println("WiFI connected");
+
+    // 打开文件
+    File file = SD.open(path, FILE_READ);
+    if (!file) {
+      Serial.println("Failed to open file for reading");
+      return;
+    }
+
+    // 构建 HTTP 请求
+    HTTPClient http;
+    http.begin(serverUrl);
+
+    // 设置头部为 multipart/form-data
+    String boundary = "----ESP32Boundary";
+    http.addHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+    // 构建 multipart/form-data 数据
+    String bodyStart = "--" + boundary + "\r\n";
+    bodyStart += "Content-Disposition: form-data; name=\"file\"; filename=\"" + String(path) + "\"\r\n";
+    bodyStart += "Content-Type: text/plain\r\n\r\n";
+
+    String bodyEnd = "\r\n--" + boundary + "--\r\n";
+
+    // 计算请求总长度
+    int contentLength = bodyStart.length() + file.size() + bodyEnd.length();
+
+    // 设置 HTTP 请求内容长度
+    http.addHeader("Content-Length", String(contentLength));
+
+    // 向服务器发送 POST 请求
+    WiFiClient* stream = http.getStreamPtr(); //此处引发内存报错
+    stream->print(bodyStart); // 发送头部
+    while (file.available()) {
+      stream->write(file.read()); // 发送文件内容
+    }
+    stream->print(bodyEnd); // 发送结束标记
+
+    // 获取服务器响应
+    int httpResponseCode = http.POST("");
+    if (httpResponseCode > 0) {
+      Serial.printf("HTTP Response code: %d\n", httpResponseCode);
+      String response = http.getString();
+      Serial.println("Response: " + response);
+    } else {
+      Serial.printf("HTTP POST Request failed, error: %s\n", http.errorToString(httpResponseCode).c_str());
+    }
+
+    // 释放资源
+    file.close();
+    http.end();
+}
+
 
 #endif
